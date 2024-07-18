@@ -17,9 +17,13 @@ import java.util.Map;
 
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
+import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
+import net.runelite.client.ui.ClientToolbar;
+import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.ui.overlay.OverlayManager;
+import net.runelite.client.util.ImageUtil;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -46,6 +50,12 @@ public class NpcTimerPlugin extends Plugin
 	@Inject
 	private ConfigManager configManager;
 
+	@Inject
+	private ClientToolbar clientToolbar;
+
+	private NpcTimerPanel panel;
+	private NavigationButton navButton;
+
 	private Map<String, NpcStats> npcStats = new HashMap<>();
 	private NPC currentTarget;
 	private Instant combatStartTime;
@@ -63,13 +73,32 @@ public class NpcTimerPlugin extends Plugin
 	{
 		overlayManager.add(npcTimerOverlay);
 		loadNpcStats();
+		panel = new NpcTimerPanel(this, config);
+		navButton = NavigationButton.builder()
+				.tooltip("NPC Timer")
+				.icon(ImageUtil.loadImageResource(getClass(), "/icon.png"))
+				.priority(5)
+				.panel(panel)
+				.build();
+		clientToolbar.addNavigation(navButton);
 	}
 
 	@Override
 	protected void shutDown()
 	{
-		overlayManager.remove(npcTimerOverlay);
 		saveNpcStats();
+		overlayManager.remove(npcTimerOverlay);
+		clientToolbar.removeNavigation(navButton);
+	}
+
+	@Subscribe
+	public void onNpcDespawned(NpcDespawned npcDespawned)
+	{
+		NPC npc = npcDespawned.getNpc();
+		if (inCombat && npc.equals(currentTarget))
+		{
+			recordKill(npc.getName());
+		}
 	}
 
 	@Subscribe
@@ -82,56 +111,47 @@ public class NpcTimerPlugin extends Plugin
 	}
 
 	@Subscribe
-	public void onInteractingChanged(InteractingChanged event)
-	{
-		if (event.getSource() != client.getLocalPlayer())
-			return;
-
-		if (event.getTarget() instanceof NPC)
-		{
-			NPC npc = (NPC) event.getTarget();
-			if (isTrackedNpc(npc.getName()))
-			{
-				startCombat(npc);
-			}
-		}
-		else if (inCombat)
-		{
-			// Player interacted with something else, start timeout
-			updateCombatTime();
-		}
-	}
-
-	@Subscribe
 	public void onHitsplatApplied(HitsplatApplied event)
 	{
-		if (!(event.getActor() instanceof NPC))
-			return;
+		Actor target = event.getActor();
 
-		NPC npc = (NPC) event.getActor();
-		if (isTrackedNpc(npc.getName()))
+		if (target instanceof NPC || (event.getActor() == client.getLocalPlayer() && client.getLocalPlayer().getInteracting() instanceof NPC))
 		{
-			updateCombatTime();
-			if (npc.getHealthRatio() == 0)
+			NPC npc = (target instanceof NPC) ? (NPC) target : (NPC) client.getLocalPlayer().getInteracting();
+			String npcName = npc.getName();
+
+			if (npcName != null && isTrackedNpc(npcName))
 			{
-				recordKill(npc.getName());
+				if (!inCombat || currentTarget == null || !currentTarget.equals(npc))
+				{
+					startCombat(npc);
+				}
+				updateCombatTime();
+				checkForKill(npc);
 			}
 		}
 	}
 
 	@Subscribe
-	public void onNpcDespawned(NpcDespawned event)
+	public void onConfigChanged(ConfigChanged event)
 	{
-		NPC npc = event.getNpc();
-		if (npc == currentTarget && npc.isDead())
+		if (event.getGroup().equals("NpcTimer"))
 		{
-			recordKill(npc.getName());
+			SwingUtilities.invokeLater(() -> {
+				panel.update();
+				loadNpcStats();
+			});
 		}
 	}
 
 	private void startCombat(NPC npc)
 	{
-		if (currentTarget == null || !currentTarget.equals(npc))
+		String npcName = npc.getName();
+		if (npcName == null) {
+			return; // Skip if the NPC name is null
+		}
+
+		if (!inCombat || currentTarget == null || !npcName.equals(currentTarget.getName()))
 		{
 			currentTarget = npc;
 			combatStartTime = Instant.now();
@@ -145,16 +165,6 @@ public class NpcTimerPlugin extends Plugin
 		lastCombatTime = Instant.now();
 	}
 
-	private void checkCombatTimeout()
-	{
-		if (lastCombatTime == null || Duration.between(lastCombatTime, Instant.now()).compareTo(COMBAT_TIMEOUT) > 0)
-		{
-			inCombat = false;
-			currentTarget = null;
-			combatStartTime = null;
-		}
-	}
-
 	private void recordKill(String npcName)
 	{
 		if (combatStartTime == null)
@@ -165,18 +175,20 @@ public class NpcTimerPlugin extends Plugin
 		stats.killCount++;
 		stats.totalKillTime += killTime;
 		stats.personalBest = Math.min(stats.personalBest, killTime);
-		saveNpcStats();
+		saveNpcStats();  // Save after each kill
 
-		inCombat = false;
-		currentTarget = null;
-		combatStartTime = null;
+		resetCombatState();
 	}
 
 	private boolean isTrackedNpc(String npcName)
 	{
+		if (npcName == null) {
+			return false;
+		}
 		return Arrays.stream(config.npcsToTrack().split(","))
 				.map(String::trim)
-				.anyMatch(npcName::equalsIgnoreCase);
+				.map(String::toLowerCase)
+				.anyMatch(npcName.toLowerCase()::equals);
 	}
 
 	private void loadNpcStats()
@@ -212,24 +224,42 @@ public class NpcTimerPlugin extends Plugin
 
 	private void updateCombatState()
 	{
-		Player player = client.getLocalPlayer();
-		Actor target = player.getInteracting();
+		if (inCombat && currentTarget != null)
+		{
+			if (currentTarget.getHealthRatio() == 0 || currentTarget.isDead() || currentTarget.getHealthRatio() == 0)
+				recordKill(currentTarget.getName());
 
-		if (target instanceof NPC && isTrackedNpc(((NPC) target).getName()))
+			else if (Duration.between(lastCombatTime, Instant.now()).compareTo(COMBAT_TIMEOUT) > 0)
+				resetCombatState();
+		}
+	}
+
+	private void checkForKill(NPC npc)
+	{
+		if (npc.equals(currentTarget) && (npc.getHealthRatio() == 0 || npc.isDead() || npc.getHealthRatio() == 0))
 		{
-			if (!inCombat || currentTarget == null || !currentTarget.equals(target))
+			recordKill(npc.getName());
+		}
+	}
+
+	public void resetStatsForNpc(String npcName)
+	{
+		String normalizedName = npcName.trim().toLowerCase();
+		for (Map.Entry<String, NpcStats> entry : new HashMap<>(npcStats).entrySet())
+		{
+			if (entry.getKey().toLowerCase().equals(normalizedName))
 			{
-				startCombat((NPC) target);
-			}
-			else
-			{
-				updateCombatTime();
+				npcStats.remove(entry.getKey());
 			}
 		}
-		else if (inCombat)
-		{
-			checkCombatTimeout();
-		}
+		saveNpcStats();
+	}
+
+	private void resetCombatState()
+	{
+		inCombat = false;
+		currentTarget = null;
+		combatStartTime = null;
 	}
 
 	@Provides
