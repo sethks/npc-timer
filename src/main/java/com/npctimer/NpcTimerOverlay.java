@@ -1,31 +1,24 @@
 package com.npctimer;
 
 import net.runelite.api.Client;
-import net.runelite.client.ui.overlay.Overlay;
-import net.runelite.client.ui.overlay.OverlayLayer;
-import net.runelite.client.ui.overlay.OverlayMenuEntry;
+import net.runelite.client.ui.overlay.OverlayPanel;
 import net.runelite.client.ui.overlay.OverlayPosition;
 import net.runelite.client.ui.overlay.components.LineComponent;
-import net.runelite.client.ui.overlay.components.PanelComponent;
 
 import javax.inject.Inject;
 import java.awt.*;
-import net.runelite.client.util.ColorUtil;
 
-public class NpcTimerOverlay extends Overlay
+public class NpcTimerOverlay extends OverlayPanel
 {
     private NpcTimerPlugin plugin;
     private NpcTimerConfig config;
     private Client client;
-
-    private PanelComponent panelComponent = new PanelComponent();
 
     @Inject
     public NpcTimerOverlay(NpcTimerPlugin plugin, NpcTimerConfig config, Client client)
     {
         super(plugin);
         setPosition(OverlayPosition.ABOVE_CHATBOX_RIGHT);
-        setLayer(OverlayLayer.ABOVE_SCENE);
         this.plugin = plugin;
         this.config = config;
         this.client = client;
@@ -42,6 +35,7 @@ public class NpcTimerOverlay extends Overlay
         panelComponent.getChildren().clear();
 
         String currentNpcName = plugin.getCurrentNpcName();
+
         if (currentNpcName != null)
         {
             panelComponent.getChildren().add(LineComponent.builder()
@@ -92,7 +86,7 @@ public class NpcTimerOverlay extends Overlay
                     .build());
         }
 
-        return panelComponent.render(graphics);
+        return super.render(graphics);
     }
 
     private String formatTime(long milliseconds)

@@ -47,19 +47,17 @@ public interface NpcTimerConfig extends Config
 	)
 	default boolean showPersonalBest() { return true; }
 
-//	@ConfigItem(
-//			keyName = "removeOnDeath",
-//			name = "Remove overlay on NPC death",
-//			description = "If enabled, removes the overlay when the NPC dies",
-//			position = 5
-//	)
-//	default boolean removeOnDeath() { return false; }
+	@ConfigItem(
+			keyName = "npcsToTrack",
+			name = "NPCs to Track",
+			description = "Comma-separated list of NPC names to track (not case-sensitive)"
+	)
+	default String npcsToTrack() { return ""; }
 
 	@ConfigItem(
 			keyName = "npcsToTrack",
 			name = "NPCs to Track",
-			description = "Comma-separated list of NPC names to track. (not case sensitive)",
-			position = 6
+			description = "Comma-separated list of NPC names to track"
 	)
-	default String npcsToTrack() { return ""; }
+	void setNpcsToTrack(String npcsToTrack);
 }
