@@ -268,7 +268,7 @@ public class NpcTimerPlugin extends Plugin
 		{
 			if (!inCombat || currentTarget == null || !currentTarget.equals(interacting))
 			{
-				// Target has changed, reset combat state and start new combat
+				//// Target has changed, reset combat state and start new combat
 				resetCombatState();
 				startCombat(interacting);
 			}
