@@ -40,6 +40,7 @@ public class NpcTimerOverlay extends OverlayPanel
         {
             panelComponent.getChildren().add(LineComponent.builder()
                     .left(currentNpcName)
+                    .leftColor(Color.YELLOW)
                     .build());
 
             if (config.showCurrentKillTime() && plugin.isInCombat())
