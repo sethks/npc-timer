@@ -26,6 +26,8 @@ import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.util.ImageUtil;
 import net.runelite.client.events.NpcLootReceived;
 
+import com.npctimer.PotentialKill;
+
 import java.time.Duration;
 import java.time.Instant;
 
@@ -60,9 +62,12 @@ public class NpcTimerPlugin extends Plugin
 	private final List<NPC> targets = new ArrayList<>();
 
 	private Map<String, NpcStats> npcStats = new HashMap<>();
+	private Queue<PotentialKill> potentialKills = new LinkedList<>();
 	private NPC currentTarget;
 	private Instant combatStartTime;
 	private int currentTargetHealthRatio = -1;
+	private Instant lastKillTime;
+	private long lastKillDuration;
 
 	@Getter
 	private boolean inCombat = false;
@@ -111,9 +116,40 @@ public class NpcTimerPlugin extends Plugin
 		final NPC npc = npcLootReceived.getNpc();
 		final String name = npc.getName();
 
+		System.out.println("Loot received from NPC: " + name);
+
 		if (isTrackedNpc(name))
 		{
-			confirmKill(npc);
+			System.out.println("NPC " + name + " is being tracked");
+			long killTime;
+			boolean usePotentialKill = false;
+
+			PotentialKill kill = findPotentialKill(npc);
+			if (kill != null) {
+				killTime = Duration.between(kill.startTime, Instant.now()).toMillis();
+				usePotentialKill = true;
+				System.out.println("Found potential kill for NPC " + name + ". Kill time: " + killTime + " ms");
+			} else {
+				killTime = 0;
+				System.out.println("No potential kill found for tracked NPC " + name + ". Will use randomized average time.");
+			}
+
+			// Only update stats if the kill time is reasonable (e.g., more than 3 seconds)
+			if (killTime > 3000) {
+				updateNpcStats(name, killTime, true);
+			}
+			else
+			{
+				System.out.println("Kill time too short or not found. Using randomized average time.");
+				updateNpcStats(name, 0, false);
+			}
+
+			potentialKills.removeIf(pk -> pk.npc.getName().equals(name));
+			System.out.println("Removed NPC " + name + " from potential kills queue");
+		}
+		else
+		{
+			System.out.println("NPC " + name + " is not being tracked");
 		}
 	}
 
@@ -172,53 +208,58 @@ public class NpcTimerPlugin extends Plugin
 		}
 	}
 
+	private PotentialKill findPotentialKill(NPC npc)
+	{
+		PotentialKill oldestKill = null;
+		for (PotentialKill kill : potentialKills)
+		{
+			if (kill.npc.getName().equals(npc.getName()))
+			{
+				if (oldestKill == null || kill.startTime.isBefore(oldestKill.startTime))
+				{
+					oldestKill = kill;
+				}
+			}
+		}
+		return oldestKill;
+	}
+
 	private void startCombat(NPC npc)
 	{
 		String npcName = npc.getName();
-		if (npcName == null) {
-			return; // Skip if the NPC name is null
-		}
+		if (npcName == null)
+			return;
+
+		Instant startTime = Instant.now();
+		potentialKills.offer(new PotentialKill(npc, startTime));
+		System.out.println("Added NPC " + npcName + " to potential kills queue at time: " + startTime);
 
 		if (!inCombat || currentTarget == null || !npcName.equals(currentTarget.getName()))
 		{
 			currentTarget = npc;
 			currentTargetHealthRatio = npc.getHealthRatio();
-			combatStartTime = Instant.now();
+			combatStartTime = startTime;
 			inCombat = true;
 		}
-		updateCombatTime();
+		lastCombatTime = startTime;
+		lastKillDuration = 0;  // Reset the last kill duration
 	}
 
 	private void updateCombatTime()
 	{
-		lastCombatTime = Instant.now();
-	}
+		Instant now = Instant.now();
+		if (combatStartTime != null)
+			lastKillDuration = Duration.between(combatStartTime, now).toMillis();
 
-	private void confirmKill(NPC npc)
-	{
-		String npcName = npc.getName();
-		if (npcName == null) {
-			return;
-		}
-
-		if (currentTarget != null && currentTarget.equals(npc))
-		{
-			NpcStats stats = npcStats.computeIfAbsent(npcName, k -> new NpcStats());
-			long killTime = Duration.between(combatStartTime, Instant.now()).toMillis();
-			stats.killCount++;
-			stats.totalKillTime += killTime;
-			stats.personalBest = Math.min(stats.personalBest, killTime);
-			saveNpcStats();
-
-			resetCombatState();
-		}
+		lastKillTime = now;
+		lastCombatTime = now;
 	}
 
 	private boolean isTrackedNpc(String npcName)
 	{
-		if (npcName == null) {
+		if (npcName == null)
 			return false;
-		}
+
 		return Arrays.stream(config.npcsToTrack().split(","))
 				.map(String::trim)
 				.map(String::toLowerCase)
@@ -229,31 +270,31 @@ public class NpcTimerPlugin extends Plugin
 	{
 		if (npc.getName() == null)
 			return false;
+
 		return isTrackedNpc(npc.getName());
 	}
 
 	private void loadNpcStats()
 	{
+		System.out.println("Loading NPC stats");
 		String json = configManager.getConfiguration(CONFIG_GROUP, STATS_KEY);
 		if (json != null && !json.isEmpty())
 		{
 			Type type = new TypeToken<HashMap<String, NpcStats>>(){}.getType();
 			npcStats = new Gson().fromJson(json, type);
-
-			// Ensure all loaded stats have proper initial values
-			for (NpcStats stats : npcStats.values())
-			{
-				if (stats.killCount == null) stats.killCount = 0;
-				if (stats.totalKillTime == null) stats.totalKillTime = 0L;
-				if (stats.personalBest == null) stats.personalBest = Long.MAX_VALUE;
-			}
+		}
+		else
+		{
+			System.out.println("No saved NPC stats found");
 		}
 	}
 
 	private void saveNpcStats()
 	{
+		System.out.println("Saving NPC stats");
 		String json = new Gson().toJson(npcStats);
 		configManager.setConfiguration(CONFIG_GROUP, STATS_KEY, json);
+		System.out.println("NPC stats saved");
 	}
 
 	public long getCurrentKillTime()
@@ -269,6 +310,14 @@ public class NpcTimerPlugin extends Plugin
 	public NpcStats getNpcStats(String npcName)
 	{
 		return npcStats.get(npcName);
+	}
+
+	private long getRandomizedAverageTime(long averageTime)
+	{
+		// Create a range of +/- 3 seconds (3000 milliseconds)
+		long minTime = Math.max(1000, averageTime - 3000); // Ensure it's at least 1 second
+		long maxTime = averageTime + 3000;
+		return minTime + (long) (Math.random() * (maxTime - minTime));
 	}
 
 	private void updateCombatState()
@@ -300,6 +349,41 @@ public class NpcTimerPlugin extends Plugin
 		{
 			checkCombatTimeout();
 		}
+	}
+
+	private void updateNpcStats(String npcName, long killTime, boolean usePotentialKill)
+	{
+		System.out.println("Updating stats for NPC: " + npcName);
+		NpcStats stats = npcStats.computeIfAbsent(npcName, k -> {
+			System.out.println("Creating new stats entry for NPC: " + npcName);
+			return new NpcStats();
+		});
+
+		stats.killCount++;
+
+		if (usePotentialKill && killTime > 3000)  // Only consider kill times over 3 seconds for PB
+		{
+			stats.totalKillTime += killTime;
+			if (killTime < stats.personalBest || stats.personalBest == 0)
+			{
+				System.out.println("New personal best for " + npcName + ": " + killTime + " ms");
+				stats.personalBest = killTime;
+			}
+		}
+		else
+		{
+			long averageTime = stats.killCount > 1 ? stats.totalKillTime / (stats.killCount - 1) : 30000;
+			long randomizedTime = getRandomizedAverageTime(averageTime);
+			stats.totalKillTime += randomizedTime;
+			System.out.println("Using randomized average time: " + randomizedTime + " ms");
+		}
+
+		long avgTime = stats.totalKillTime / stats.killCount;
+		System.out.println("Updated stats for " + npcName + ": Count: " + stats.killCount +
+				", Total Time: " + stats.totalKillTime +
+				", Avg Time: " + avgTime +
+				", PB: " + stats.personalBest);
+		saveNpcStats();
 	}
 
 	private void checkForKill(NPC npc)
@@ -338,6 +422,7 @@ public class NpcTimerPlugin extends Plugin
 		currentTarget = null;
 		currentTargetHealthRatio = -1;
 		combatStartTime = null;
+		potentialKills.clear();
 	}
 
 	@Provides
