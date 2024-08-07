@@ -116,40 +116,28 @@ public class NpcTimerPlugin extends Plugin
 		final NPC npc = npcLootReceived.getNpc();
 		final String name = npc.getName();
 
-		System.out.println("Loot received from NPC: " + name);
-
 		if (isTrackedNpc(name))
 		{
-			System.out.println("NPC " + name + " is being tracked");
 			long killTime;
 			boolean usePotentialKill = false;
 
 			PotentialKill kill = findPotentialKill(npc);
-			if (kill != null) {
+			if (kill != null)
+			{
 				killTime = Duration.between(kill.startTime, Instant.now()).toMillis();
 				usePotentialKill = true;
-				System.out.println("Found potential kill for NPC " + name + ". Kill time: " + killTime + " ms");
-			} else {
-				killTime = 0;
-				System.out.println("No potential kill found for tracked NPC " + name + ". Will use randomized average time.");
-			}
-
-			// Only update stats if the kill time is reasonable (e.g., more than 3 seconds)
-			if (killTime > 3000) {
-				updateNpcStats(name, killTime, true);
 			}
 			else
-			{
-				System.out.println("Kill time too short or not found. Using randomized average time.");
+				killTime = 0;
+
+
+			// Only update stats if the kill time is reasonable (e.g., more than 3 seconds)
+			if (killTime > 3000)
+				updateNpcStats(name, killTime, true);
+			else
 				updateNpcStats(name, 0, false);
-			}
 
 			potentialKills.removeIf(pk -> pk.npc.getName().equals(name));
-			System.out.println("Removed NPC " + name + " from potential kills queue");
-		}
-		else
-		{
-			System.out.println("NPC " + name + " is not being tracked");
 		}
 	}
 
@@ -214,12 +202,8 @@ public class NpcTimerPlugin extends Plugin
 		for (PotentialKill kill : potentialKills)
 		{
 			if (kill.npc.getName().equals(npc.getName()))
-			{
 				if (oldestKill == null || kill.startTime.isBefore(oldestKill.startTime))
-				{
 					oldestKill = kill;
-				}
-			}
 		}
 		return oldestKill;
 	}
@@ -232,7 +216,6 @@ public class NpcTimerPlugin extends Plugin
 
 		Instant startTime = Instant.now();
 		potentialKills.offer(new PotentialKill(npc, startTime));
-		System.out.println("Added NPC " + npcName + " to potential kills queue at time: " + startTime);
 
 		if (!inCombat || currentTarget == null || !npcName.equals(currentTarget.getName()))
 		{
@@ -276,25 +259,18 @@ public class NpcTimerPlugin extends Plugin
 
 	private void loadNpcStats()
 	{
-		System.out.println("Loading NPC stats");
 		String json = configManager.getConfiguration(CONFIG_GROUP, STATS_KEY);
 		if (json != null && !json.isEmpty())
 		{
 			Type type = new TypeToken<HashMap<String, NpcStats>>(){}.getType();
 			npcStats = new Gson().fromJson(json, type);
 		}
-		else
-		{
-			System.out.println("No saved NPC stats found");
-		}
 	}
 
 	private void saveNpcStats()
 	{
-		System.out.println("Saving NPC stats");
 		String json = new Gson().toJson(npcStats);
 		configManager.setConfiguration(CONFIG_GROUP, STATS_KEY, json);
-		System.out.println("NPC stats saved");
 	}
 
 	public long getCurrentKillTime()
@@ -353,9 +329,7 @@ public class NpcTimerPlugin extends Plugin
 
 	private void updateNpcStats(String npcName, long killTime, boolean usePotentialKill)
 	{
-		System.out.println("Updating stats for NPC: " + npcName);
 		NpcStats stats = npcStats.computeIfAbsent(npcName, k -> {
-			System.out.println("Creating new stats entry for NPC: " + npcName);
 			return new NpcStats();
 		});
 
@@ -365,24 +339,14 @@ public class NpcTimerPlugin extends Plugin
 		{
 			stats.totalKillTime += killTime;
 			if (killTime < stats.personalBest || stats.personalBest == 0)
-			{
-				System.out.println("New personal best for " + npcName + ": " + killTime + " ms");
 				stats.personalBest = killTime;
-			}
 		}
 		else
 		{
 			long averageTime = stats.killCount > 1 ? stats.totalKillTime / (stats.killCount - 1) : 30000;
 			long randomizedTime = getRandomizedAverageTime(averageTime);
 			stats.totalKillTime += randomizedTime;
-			System.out.println("Using randomized average time: " + randomizedTime + " ms");
 		}
-
-		long avgTime = stats.totalKillTime / stats.killCount;
-		System.out.println("Updated stats for " + npcName + ": Count: " + stats.killCount +
-				", Total Time: " + stats.totalKillTime +
-				", Avg Time: " + avgTime +
-				", PB: " + stats.personalBest);
 		saveNpcStats();
 	}
 
