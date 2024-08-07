@@ -55,6 +55,9 @@ public class NpcTimerPlugin extends Plugin
 	@Inject
 	private ClientToolbar clientToolbar;
 
+	@Inject
+	private Gson gson;
+
 	private NpcTimerPanel panel;
 	private NavigationButton navButton;
 
@@ -263,13 +266,13 @@ public class NpcTimerPlugin extends Plugin
 		if (json != null && !json.isEmpty())
 		{
 			Type type = new TypeToken<HashMap<String, NpcStats>>(){}.getType();
-			npcStats = new Gson().fromJson(json, type);
+			npcStats = gson.fromJson(json, type);
 		}
 	}
 
 	private void saveNpcStats()
 	{
-		String json = new Gson().toJson(npcStats);
+		String json = gson.toJson(npcStats);
 		configManager.setConfiguration(CONFIG_GROUP, STATS_KEY, json);
 	}
 
