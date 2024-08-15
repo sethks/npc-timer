@@ -132,6 +132,7 @@ public class NpcTimerPlugin extends Plugin
 			lastKillTime = 0;
 		}
 	}
+
 //	@Subscribe
 //	public void onNpcLootReceived(final NpcLootReceived npcLootReceived)
 //	{
