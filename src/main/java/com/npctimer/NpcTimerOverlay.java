@@ -43,15 +43,6 @@ public class NpcTimerOverlay extends OverlayPanel
                     .leftColor(Color.YELLOW)
                     .build());
 
-            if (config.showCurrentKillTime() && plugin.isInCombat())
-            {
-                long currentKillTime = plugin.getCurrentKillTime();
-                panelComponent.getChildren().add(LineComponent.builder()
-                        .left("Current Time:")
-                        .right(formatTime(currentKillTime))
-                        .build());
-            }
-
             NpcTimerPlugin.NpcStats stats = plugin.getNpcStats(currentNpcName);
             if (stats != null)
             {

@@ -276,11 +276,6 @@ public class NpcTimerPlugin extends Plugin
 		configManager.setConfiguration(CONFIG_GROUP, STATS_KEY, json);
 	}
 
-	public long getCurrentKillTime()
-	{
-		return combatStartTime != null ? Duration.between(combatStartTime, Instant.now()).toMillis() : 0;
-	}
-
 	public String getCurrentNpcName()
 	{
 		return currentTarget != null ? currentTarget.getName() : null;

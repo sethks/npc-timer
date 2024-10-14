@@ -16,14 +16,6 @@ public interface NpcTimerConfig extends Config
 	default boolean npcTimer() { return true; }
 
 	@ConfigItem(
-			keyName = "showCurrentKillTime",
-			name = "Show Current Kill Time",
-			description = "Displays the current kill time",
-			position = 1
-	)
-	default boolean showCurrentKillTime() { return true; }
-
-	@ConfigItem(
 			keyName = "showAverageKillTime",
 			name = "Show Average Kill Time",
 			description = "Displays the average kill time",
