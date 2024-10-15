@@ -8,7 +8,7 @@ It works similar as counters do in boss fights except this allows you to track j
 # Settings
 All of the information for display can be toggled on or off, so you can have as much or as little information on screen.
 
-![65](https://github.com/user-attachments/assets/0a7a7c8c-1810-4565-946a-7d6a4a510847)
+![65](https://github.com/user-attachments/assets/59e66fb5-de2f-4d6c-bafa-95053d38feb8)
 
 # Panel
 The side panel allows you reset the data of any NPC you currently have tracked. It will give you a confirmation if you want to erase all tracking data from said NPC before deletion.
