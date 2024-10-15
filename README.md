@@ -1,7 +1,8 @@
 # NPC Combat Timer
 It works similar as counters do in boss fights except this allows you to track just about anything in RuneScape. This plugin is great if you want to track averages in slayer tasks, try out new gear and compare kill times, or just add that little bit of engagement in slayer tasks to keep it more engaging!
 
-![kill](https://github.com/user-attachments/assets/a9f1bbbc-1cb5-4e5c-89a1-5bc4439279f3)
+
+![kill](https://github.com/user-attachments/assets/34d3e47d-55f6-4ab9-9352-06ac360d5e8e)
 
 
 # Settings
